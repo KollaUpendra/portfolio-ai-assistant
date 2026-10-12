@@ -37,40 +37,34 @@ Bad response:
 `;
 
 
-export const generateAnswer = async (message, portfolioContext) => {
-    // send message + portfolio context to the LLM
-    const systemPrompt = `
-    ${SYSTEM}
+/**
+ * Generates an answer from Ollama using the system prompt, portfolio context, and conversation history.
+ * @param {object} portfolioContext - Structured portfolio data.
+ * @param {Array<{role: string, content: string}>} conversationMessages - Ordered messages sent to the LLM.
+ * @returns {Promise<string>} The assistant's generated response text.
+ */
+export const generateChatAnswer = async (portfolioContext, conversationMessages = []) => {
+    const systemPrompt = `${SYSTEM}\n\nPORTFOLIO:\n${JSON.stringify(portfolioContext, null, 2)}`;
     
-    PORTFOLIO:
-    ${JSON.stringify(portfolioContext, null, 2)}
-    `;
+    const messageHistory = Array.isArray(conversationMessages) ? conversationMessages : [];
 
-    const res = await fetch("http://localhost:11434/api/chat", {
+    const response = await fetch("http://localhost:11434/api/chat", {
         method: "POST",
-    headers: {
-        "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-        model: "llama3:8b",
-        messages: [
-            {
-                role: "system",
-                content: systemPrompt,
-            },
-            {
-                role: "user",
-                content: message,
-            },
-        ],
-        stream: false,
-    }),
-});
-   if (!res.ok) {
-    throw new Error(`Ollama request failed: ${res.status}`);
-}
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            model: "llama3:8b",
+            messages: [
+                { role: "system", content: systemPrompt },
+                ...messageHistory.slice(-10), // Keep the latest 10 messages for context
+            ],
+            stream: false,
+        }),
+    });
 
-const data = await res.json();
+    if (!response.ok) {
+        throw new Error(`Ollama request failed with status: ${response.status}`);
+    }
 
-return data.message.content;
+    const responseData = await response.json();
+    return responseData.message.content;
 };
